@@ -196,7 +196,7 @@ st.markdown("""
         left: 0;
         width: 100%;
         height: 100%;
-        opacity: 0.4;  /* Adjust this value to change video opacity */
+        opacity: 0.3;  /* Adjust this value to change video opacity */
     }
     .video-wrapper video {
         width: 100%;
@@ -574,44 +574,104 @@ if st.session_state['show_optimized_map']:
 
         st.plotly_chart(fig, use_container_width=True)
 
+        
+
     # Add this new section for the impact statement
     if st.session_state['optimized_route'] and st.session_state['route_points']:
         st.subheader("Environmental Impact")
 
-        # Calculate total concentration
-        total_concentration = sum(st.session_state['route_points'])
-
         # Calculate impact metrics
-        plastic_bottles = int(total_concentration)  # Assuming 1 piece ≈ 1 bottle for simplicity
-        plastic_waste_tons = round((plastic_bottles/0.035)/1000, 2)  # Assuming average weight of 1g per piece
-        shipping_containers = max(1, int(plastic_waste_tons / 30))  # Assuming 30 tons per container
-        years_to_decompose = 400  # Fixed value as per example
+        total_concentration = sum(st.session_state['route_points'])
+        plastic_bottles = int(total_concentration)
+        plastic_waste_tons = round((plastic_bottles/0.035)/1000, 2)
+        shipping_containers = max(1, int(plastic_waste_tons / 30))
+        years_to_decompose = 400
 
-        # Create impact statement
-        impact_html = f"""
-        <div style="background-color: black; padding: 20px; border-radius: 10px; margin-top: 20px;">
-            <h3 style="color: #1c5d99; margin-bottom: 15px;">Route Impact Analysis</h3>
-            <p style="font-size: 18px; margin-bottom: 30px;">
-                This route passes through waters containing the equivalent of:
-            </p>
-            <ul style="list-style-type: none; padding-left: 0;">
-                <li style="font-size: 20px; margin-bottom: 8px;">
-                    <span style="color: #1c5d99; font-weight: bold; font-size: 40px;">🥤 {plastic_bottles:,}</span>&nbsp;&nbsp;&nbsp;plastic bottles
-                </li>
-                <li style="font-size: 20px; margin-bottom: 8px;">
-                    <span style="color: #1c5d99; font-weight: bold; font-size: 40px;">🗑️ {plastic_waste_tons:,}</span>&nbsp;&nbsp;&nbsp;tons of plastic waste
-                </li>
-                <li style="font-size: 20px; margin-bottom: 8px;">
-                    <span style="color: #1c5d99; font-weight: bold; font-size: 40px;">🚢 {shipping_containers}</span>&nbsp;&nbsp;&nbsp;standard shipping container{'s' if shipping_containers > 1 else ''}
-                </li>
-                <li style="font-size: 20px; margin-bottom: 8px;">
-                    <span style="color: #1c5d99; font-weight: bold; font-size: 40px;">⏳ {years_to_decompose}</span>&nbsp;&nbsp;&nbsp;years to decompose
-                </li>
-            </ul>
-            <p style="font-style: italic; margin-top: 15px;">
-                These estimates highlight the importance of ocean cleanup efforts and reducing plastic pollution.
-            </p>
-        </div>
-        """
+        col_text, col_graph = st.columns([1, 1])
 
-        st.markdown(impact_html, unsafe_allow_html=True)
+        with col_text:
+            # Create impact statement
+            impact_html = f"""
+            <div style="background-color: black; padding: 20px; border-radius: 10px; margin-top: 20px;">
+                <h3 style="color: #1c5d99; margin-bottom: 15px;">Route Impact Analysis</h3>
+                <p style="font-size: 18px; margin-bottom: 30px;">
+                    This route passes through waters containing the equivalent of:
+                </p>
+                <ul style="list-style-type: none; padding-left: 0;">
+                    <li style="font-size: 20px; margin-bottom: 8px;">
+                        <span style="color: #1c5d99; font-weight: bold; font-size: 40px;">🥤 {plastic_bottles:,}</span>&nbsp;&nbsp;&nbsp;plastic bottles
+                    </li>
+                    <li style="font-size: 20px; margin-bottom: 8px;">
+                        <span style="color: #1c5d99; font-weight: bold; font-size: 40px;">🗑️ {plastic_waste_tons:,}</span>&nbsp;&nbsp;&nbsp;tons of plastic waste
+                    </li>
+                    <li style="font-size: 20px; margin-bottom: 8px;">
+                        <span style="color: #1c5d99; font-weight: bold; font-size: 40px;">🚢 {shipping_containers}</span>&nbsp;&nbsp;&nbsp;standard shipping container{'s' if shipping_containers > 1 else ''}
+                    </li>
+                    <li style="font-size: 20px; margin-bottom: 8px;">
+                        <span style="color: #1c5d99; font-weight: bold; font-size: 40px;">⏳ {years_to_decompose}</span>&nbsp;&nbsp;&nbsp;years to decompose
+                    </li>
+                </ul>
+                <p style="font-style: italic; margin-top: 15px;">
+                    These estimates highlight the importance of ocean cleanup efforts and reducing plastic pollution.
+                </p>
+            </div>
+            """
+
+            st.markdown(impact_html, unsafe_allow_html=True)
+
+        with col_graph:
+            # Create bar graph
+            fig = go.Figure()
+            
+            colors = ['#00b4d8', '#0077be', '#023e8a']
+            
+            fig.add_trace(go.Bar(
+                x=['Plastic Bottles', 'Plastic Waste (tons)', 'Shipping Containers'],
+                y=[plastic_bottles, plastic_waste_tons, shipping_containers],
+                marker_color=colors,
+                text=[f'{plastic_bottles:,}', f'{plastic_waste_tons:,}', f'{shipping_containers}'],
+                textposition='outside',
+                textfont=dict(size=12, color='white'),
+                hoverinfo='y+name',
+                hovertemplate='%{y:,.0f}<extra></extra>',
+            ))
+
+            fig.update_layout(
+                title={
+                    'text': 'Environmental Impact Metrics',
+                    'y':0.95,
+                    'x':0.5,
+                    'xanchor': 'center',
+                    'yanchor': 'top',
+                    'font': dict(size=20, color='white')
+                },
+                xaxis_title=None,
+                yaxis_title=None,
+                plot_bgcolor='rgba(0,0,0,0)',
+                paper_bgcolor='rgba(0,0,0,0)',
+                yaxis_type='log',
+                height=500,
+                margin=dict(l=50, r=20, t=80, b=20),
+                showlegend=False,
+            )
+
+            fig.update_xaxes(
+                showgrid=False,
+                showline=True,
+                linecolor='rgba(255,255,255,0.3)',
+                tickfont=dict(size=12, color='white'),
+                tickangle=0
+            )
+
+            fig.update_yaxes(
+                showgrid=True,
+                gridcolor='rgba(255,255,255,0.1)',
+                showline=True,
+                linecolor='rgba(255,255,255,0.3)',
+                zeroline=False,
+                tickfont=dict(size=12, color='white'),
+                tickformat='.2s'
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+
