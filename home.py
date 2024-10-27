@@ -53,118 +53,141 @@ def heuristic(point1, point2):
     # Ensure we're only using lat and lon for distance calculation
     return geopy_distance.distance(point1[:2][::-1], point2[:2][::-1]).kilometers
 
-def find_optimal_route(start_coords, end_coords, target_distance, coordinates, tree, plastic_weight=0.8):
-    # Add input validation at the beginning of the function
-    if not (-180 <= start_coords[0] <= 180) or not (-90 <= start_coords[1] <= 90):
-        return None, "Invalid start coordinates. Longitude must be between -180 and 180, latitude between -90 and 90."
-    if not (-180 <= end_coords[0] <= 180) or not (-90 <= end_coords[1] <= 90):
-        return None, "Invalid end coordinates. Longitude must be between -180 and 180, latitude between -90 and 90."
-
-    if not (is_valid_ocean_point(start_coords[1], start_coords[0]) and is_valid_ocean_point(end_coords[1], end_coords[0])):
-        return None, "Start or end point is on land. Please select ocean coordinates."
-
-    # start and end are already in (lon, lat) format, no need to convert
-    start = start_coords
-    end = end_coords
-
-    # Find closest points in our dataset
-    _, start_idx = tree.query([start[0], start[1]])
-    _, end_idx = tree.query([end[0], end[1]])
+def find_optimal_route(start_coords, end_coords, target_distance, coordinates, 
+                        variation_radius=1.0, num_variations=20, max_iterations=100):
+    """
+    Finds an optimized route that maintains connectivity while maximizing plastic collection.
     
-    start_point = coordinates[start_idx]
-    end_point = coordinates[end_idx]
+    Args:
+        start_coords: Tuple of (lon, lat) for starting point
+        end_coords: Tuple of (lon, lat) for ending point
+        target_distance: Desired route distance in kilometers
+        coordinates: List of (lon, lat, concentration) tuples
+        variation_radius: Maximum deviation from backbone path (in km)
+        num_variations: Number of variation points to try at each step
+        max_iterations: Maximum number of optimization iterations
     
-    direct_distance = heuristic(start_point, end_point)
-    if target_distance < direct_distance:
-        return None, f"Target distance ({target_distance:.2f} km) is less than minimum possible distance ({direct_distance:.2f} km)."
-
-    open_set = []
-    heapq.heappush(open_set, (0, 0, start_point))
+    Returns:
+        tuple: (route_points, message)
+            route_points: List of [lat, lon] points defining the route
+            message: String describing the route metrics
+    """
+    def calculate_direct_path(start, end, num_points=10):
+        """Creates a straight line path between start and end points"""
+        lats = np.linspace(start[1], end[1], num_points)
+        lons = np.linspace(start[0], end[0], num_points)
+        return list(zip(lons, lats))
     
-    came_from = {}
-    g_score = {start_point: 0}
-    plastic_score = {start_point: start_point[2]}
-    
-    visited = set()
-    
-    while open_set:
-        current_priority, current_g, current = heapq.heappop(open_set)
+    def find_nearby_points(center, radius_km, exclude_points=None):
+        """Find all points within radius km of center point"""
+        if exclude_points is None:
+            exclude_points = set()
+            
+        nearby = []
+        center_lat, center_lon = center[1], center[0]
         
-        if current in visited:
-            continue
-            
-        visited.add(current)
-        
-        if current == end_point:
-            path = []
-            total_plastic = 0
-            route_points = []
-            curr = current
-            while curr != start_point:
-                path.append(curr)
-                total_plastic += curr[2]
-                route_points.append(curr[2])
-                curr = came_from[curr]
-            path.append(start_point)
-            route_points.append(start_point[2])
-            path.reverse()
-            route_points.reverse()
-            
-            # Convert path coordinates to (lat, lon) format for Folium
-            folium_path = [(point[1], point[0]) for point in path]
-            
-            # Verify entire path is through ocean
-            for i in range(len(folium_path) - 1):
-                if not is_ocean_path(folium_path[i], folium_path[i + 1]):
-                    continue  # Skip this path and keep searching
-            
-            st.session_state['route_points'] = route_points
-            return folium_path, f"Found route with total waste concentration score: {total_plastic:.2f}"
-        
-        k = min(30, len(coordinates))
-        distances, indices = tree.query([current[0], current[1]], k=k)
-        
-        if not isinstance(distances, (list, tuple, np.ndarray)):
-            distances = [distances]
-            indices = [indices]
-            
-        for dist, index in zip(distances, indices):
-            neighbor = coordinates[index]
-            
-            if neighbor in visited:
-                continue
-            
-            # Check if the path to neighbor crosses land
-            if not is_ocean_path((current[1], current[0]), (neighbor[1], neighbor[0])):
+        for lon, lat, conc in coordinates:
+            if (lon, lat) in exclude_points:
                 continue
                 
-            tentative_g_score = g_score[current] + heuristic(current, neighbor)
+            dist = geopy_distance.distance(
+                (lat, lon), 
+                (center_lat, center_lon)
+            ).kilometers
             
-            if tentative_g_score > target_distance:
-                continue
+            if dist <= radius_km:
+                nearby.append((lon, lat, conc))
+                
+        return nearby
+    
+    def calculate_route_metrics(route):
+        """Calculate total distance and plastic concentration for a route"""
+        total_distance = sum(
+            geopy_distance.distance(
+                (route[i][1], route[i][0]),
+                (route[i+1][1], route[i+1][0])
+            ).kilometers
+            for i in range(len(route)-1)
+        )
+        
+        # Calculate total concentration by finding nearest concentration point
+        total_concentration = 0
+        for point in route:
+            nearby = find_nearby_points(point, 0.5)
+            if nearby:
+                # Take highest concentration if multiple points nearby
+                total_concentration += max(p[2] for p in nearby)
+                
+        return total_distance, total_concentration
+    
+    # Create initial backbone route
+    backbone_points = calculate_direct_path(start_coords, end_coords)
+    best_route = [(lon, lat, 0) for lon, lat in backbone_points]
+    best_distance, best_concentration = calculate_route_metrics(best_route)
+    
+    # Optimize route through iterations
+    for _ in range(max_iterations):
+        improved = False
+        
+        # Try varying each point except start and end
+        for i in range(1, len(best_route) - 1):
+            current_point = best_route[i]
+            prev_point = best_route[i-1]
+            next_point = best_route[i+1]
             
-            tentative_plastic_score = plastic_score[current] + neighbor[2]
-            
-            distance_to_end = heuristic(neighbor, end_point)
-            path_deviation = abs(tentative_g_score - direct_distance) / direct_distance
-            
-            plastic_density = tentative_plastic_score / tentative_g_score
-            normalized_distance = distance_to_end / direct_distance
-            
-            priority = (
-                (1 - plastic_weight) * normalized_distance +
-                (0.1 * path_deviation) -
-                (plastic_weight * 2 * plastic_density)
+            # Generate variation points
+            nearby_points = find_nearby_points(
+                current_point,
+                variation_radius
             )
             
-            if neighbor not in g_score or tentative_plastic_score > plastic_score[neighbor]:
-                came_from[neighbor] = current
-                g_score[neighbor] = tentative_g_score
-                plastic_score[neighbor] = tentative_plastic_score
-                heapq.heappush(open_set, (priority, tentative_g_score, neighbor))
+            if not nearby_points:
+                continue
+                
+            # Score variation points
+            variations = []
+            for variation in nearby_points:
+                # Create temporary route with variation
+                temp_route = best_route.copy()
+                temp_route[i] = variation
+                
+                # Calculate metrics
+                temp_distance, temp_concentration = calculate_route_metrics(temp_route)
+                
+                # Check if variation maintains target distance constraint
+                if abs(temp_distance - target_distance) <= target_distance * 0.2:
+                    # Score based on concentration improvement vs distance increase
+                    concentration_improvement = temp_concentration - best_concentration
+                    distance_penalty = max(0, temp_distance - best_distance)
+                    
+                    score = concentration_improvement - (distance_penalty * 0.5)
+                    variations.append((score, temp_route, temp_distance, temp_concentration))
+            
+            # Apply best variation if it improves the route
+            if variations:
+                variations.sort(reverse=True)
+                best_variation = variations[0]
+                
+                if best_variation[0] > 0:  # If score is positive
+                    best_route = best_variation[1]
+                    best_distance = best_variation[2]
+                    best_concentration = best_variation[3]
+                    improved = True
+        
+        # If no improvements found, stop iterations
+        if not improved:
+            break
     
-    return None, "No valid path found meeting the distance constraints. Try adjusting the target distance."
-
+    # Convert final route to format needed for visualization
+    route_points = [[point[1], point[0]] for point in best_route]
+    
+    message = (
+        f"Route optimized! Total distance: {best_distance:.2f} km\n"
+        f"Target distance: {target_distance:.2f} km\n"
+        f"Total plastic concentration: {best_concentration:.2f} pieces/m³"
+    )
+    
+    return route_points, message
 @st.cache_resource
 def load_image():
     image = Image.open("static/img/bgimageocean.jpg")
