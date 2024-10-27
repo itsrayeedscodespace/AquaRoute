@@ -164,6 +164,80 @@ def find_optimal_route(start_coords, end_coords, target_distance, coordinates, t
     
     return None, "No valid path found meeting the distance constraints. Try adjusting the target distance."
 
+@st.cache_resource
+def load_image():
+    image = Image.open("static/img/bgimageocean.jpg")
+    buffered = BytesIO()
+    image.save(buffered, format="JPEG")
+    return base64.b64encode(buffered.getvalue()).decode()
+
+@st.cache_resource
+def load_video():
+    with open("vid/oceanvid.mp4", "rb") as video_file:
+        video_bytes = video_file.read()
+    return base64.b64encode(video_bytes).decode()
+
+# Load resources
+img_str = load_image()
+video_str = load_video()
+
+# Custom CSS for the video container and overlay text
+st.markdown("""
+    <style>
+    .video-container {
+        position: relative;
+        width: 100%;
+        height: 70vh;
+        overflow: hidden;
+    }
+    .video-wrapper {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        opacity: 0.4;  /* Adjust this value to change video opacity */
+    }
+    .video-wrapper video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    .overlay-text {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        color: white;
+        font-size: 3vw;
+        font-weight: bold;
+        text-align: center;
+        width: 100%;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+        z-index: 1;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+# Display video with overlay text
+st.markdown(f"""
+    <div class="video-container">
+        <div class="video-wrapper">
+            <video autoplay loop muted playsinline>
+                <source src="data:video/mp4;base64,{video_str}" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+        </div>
+        <div class="overlay-text">
+            Welcome to AquaRoute<br>
+            <span style="font-size: 35px;">Ocean Plastic Route Optimizer</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+# Add some spacing after the video
+st.markdown("<br>", unsafe_allow_html=True)
+
 # Initialize session state
 if 'start_position' not in st.session_state:
     st.session_state['start_position'] = ''
@@ -193,7 +267,7 @@ except Exception as e:
     st.error(f"Error loading data: {str(e)}")
     st.stop()
 
-st.title("AquaRoute - Ocean Route Optimizer")
+st.title("AquaRoute - Ocean Plastic Route Optimizer")
 st.subheader("Plan Your Route")
 
 col1, col2 = st.columns([2, 1])
@@ -522,10 +596,10 @@ if st.session_state['show_optimized_map']:
             </p>
             <ul style="list-style-type: none; padding-left: 0;">
                 <li style="font-size: 20px; margin-bottom: 8px;">
-                    <span style="color: #1c5d99; font-weight: bold; font-size: 40px;">🍶 {plastic_bottles:,}</span>&nbsp;&nbsp;&nbsp;plastic bottles
+                    <span style="color: #1c5d99; font-weight: bold; font-size: 40px;">🥤 {plastic_bottles:,}</span>&nbsp;&nbsp;&nbsp;plastic bottles
                 </li>
                 <li style="font-size: 20px; margin-bottom: 8px;">
-                    <span style="color: #1c5d99; font-weight: bold; font-size: 40px;">⚖️ {plastic_waste_tons:,}</span>&nbsp;&nbsp;&nbsp;tons of plastic waste
+                    <span style="color: #1c5d99; font-weight: bold; font-size: 40px;">🗑️ {plastic_waste_tons:,}</span>&nbsp;&nbsp;&nbsp;tons of plastic waste
                 </li>
                 <li style="font-size: 20px; margin-bottom: 8px;">
                     <span style="color: #1c5d99; font-weight: bold; font-size: 40px;">🚢 {shipping_containers}</span>&nbsp;&nbsp;&nbsp;standard shipping container{'s' if shipping_containers > 1 else ''}
