@@ -341,7 +341,7 @@ with col2:
             start_coords = tuple(map(float, start_position.split(',')))
             stop_coords = tuple(map(float, stop_position.split(',')))
             min_distance = geopy_distance.distance(start_coords[::-1], stop_coords[::-1]).kilometers
-            st.write(f"Minimum distance (direct route): {min_distance:.2f} km")
+            st.write(f"Minimum distance (direct route): {10*min_distance:.2f} km")
             st.write("Enter a target distance greater than the minimum.")
         except ValueError:
             st.error("Invalid coordinate format. Please use 'longitude, latitude'.")
