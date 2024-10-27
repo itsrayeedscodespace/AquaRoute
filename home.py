@@ -199,7 +199,15 @@ st.subheader("Plan Your Route")
 col1, col2 = st.columns([2, 1])
 
 with col1:
-    m = folium.Map(location=st.session_state['map_center'], zoom_start=3)
+    # Determine the map center based on selected positions
+    if st.session_state['stop_position']:
+        map_center = list(map(float, st.session_state['stop_position'].split(',')))[::-1]
+    elif st.session_state['start_position']:
+        map_center = list(map(float, st.session_state['start_position'].split(',')))[::-1]
+    else:
+        map_center = st.session_state['map_center']
+
+    m = folium.Map(location=map_center, zoom_start=5)
     
     # Add markers for start and stop positions if they exist
     if st.session_state['start_position']:
@@ -227,12 +235,14 @@ with col1:
         if not st.session_state['start_position']:
             if is_valid_ocean_point(clicked_lat, clicked_lon):
                 st.session_state['start_position'] = f"{clicked_lon:.6f}, {clicked_lat:.6f}"
+                st.session_state['map_center'] = [clicked_lat, clicked_lon]
                 st.rerun()
             else:
                 st.error("Selected point is on land. Please select an ocean coordinate.")
         elif not st.session_state['stop_position']:
             if is_valid_ocean_point(clicked_lat, clicked_lon):
                 st.session_state['stop_position'] = f"{clicked_lon:.6f}, {clicked_lat:.6f}"
+                st.session_state['map_center'] = [clicked_lat, clicked_lon]
                 st.rerun()
             else:
                 st.error("Selected point is on land. Please select an ocean coordinate.")
@@ -273,6 +283,7 @@ with col2:
     if st.button("Clear Points"):
         st.session_state['start_position'] = ''
         st.session_state['stop_position'] = ''
+        st.session_state['distance'] = ''
         st.session_state['optimized_route'] = None
         st.session_state['route_message'] = ''
         st.session_state['show_optimized_map'] = False
@@ -304,13 +315,14 @@ with col2:
                 if target_distance < min_distance:
                     raise ValueError(f"Target distance ({target_distance:.2f} km) is less than minimum possible distance ({min_distance:.2f} km).")
 
-                optimized_route, message = find_optimal_route(
+                with st.spinner('Optimizing route...'):
+                    optimized_route, message = find_optimal_route(
                     start_coords, 
                     stop_coords, 
                     target_distance,
                     coordinates,
                     tree
-                )
+                    )
                 
                 st.session_state['optimized_route'] = optimized_route
                 st.session_state['route_message'] = message
@@ -497,7 +509,7 @@ if st.session_state['show_optimized_map']:
 
         # Calculate impact metrics
         plastic_bottles = int(total_concentration)  # Assuming 1 piece ≈ 1 bottle for simplicity
-        plastic_waste_tons = round(total_concentration * 0.001, 2)  # Assuming average weight of 1g per piece
+        plastic_waste_tons = round((plastic_bottles/0.035)/1000, 2)  # Assuming average weight of 1g per piece
         shipping_containers = max(1, int(plastic_waste_tons / 30))  # Assuming 30 tons per container
         years_to_decompose = 400  # Fixed value as per example
 
