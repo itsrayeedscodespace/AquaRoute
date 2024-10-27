@@ -14,6 +14,7 @@ from folium import plugins
 import csv
 import plotly.graph_objs as go
 from plotly.subplots import make_subplots
+from streamlit.components.v1 import iframe
 
 st.set_page_config(page_title="AquaRoute", layout="wide")
 
@@ -230,7 +231,7 @@ st.markdown(f"""
         </div>
         <div class="overlay-text">
             Welcome to AquaRoute<br>
-            <span style="font-size: 35px;">Ocean Plastic Route Optimizer</span>
+            <span style="font-size: 35px;">Plastic Cleanup Route Optimizer</span>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -267,7 +268,7 @@ except Exception as e:
     st.error(f"Error loading data: {str(e)}")
     st.stop()
 
-st.title("AquaRoute - Ocean Plastic Route Optimizer")
+st.title("AquaRoute - Plastic Cleanup Route Optimizer")
 st.subheader("Plan Your Route")
 
 col1, col2 = st.columns([2, 1])
@@ -675,3 +676,47 @@ if st.session_state['show_optimized_map']:
 
             st.plotly_chart(fig, use_container_width=True)
 
+
+st.markdown("---")  # This adds a horizontal line for separation
+
+st.subheader("Global Microplastic Distribution")
+
+# Display the heatmap image
+try:
+    image = Image.open("img/heatmap.png")
+    st.image(image, use_column_width=True, caption="Global Microplastic Distribution Heatmap")
+except FileNotFoundError:
+    st.error("Error: The heatmap image was not found. Please check if it exists in the img folder.")
+
+st.markdown("<br>", unsafe_allow_html=True)  # Add some space
+
+st.subheader("Further Reading")
+
+st.write("""
+This research article provides comprehensive data on microplastic abundance in the world's upper oceans and Great Lakes. 
+It offers valuable insights into the current state of microplastic pollution and can help inform future research and cleanup efforts.
+""")
+
+# Embed the PDF
+def show_pdf(file_path):
+    with open(file_path,"rb") as f:
+        base64_pdf = base64.b64encode(f.read()).decode('utf-8')
+    pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="600" type="application/pdf"></iframe>'
+    st.markdown(pdf_display, unsafe_allow_html=True)
+
+try:
+    show_pdf("study.pdf")
+except FileNotFoundError:
+    st.error("Error: The PDF file was not found. Please check if it exists in the correct location.")
+
+# Provide a download link for the PDF
+try:
+    with open("study.pdf", "rb") as file:
+        btn = st.download_button(
+            label="Download PDF",
+            data=file,
+            file_name="microplastic_study.pdf",
+            mime="application/pdf"
+        )
+except FileNotFoundError:
+    st.error("Error: The PDF file was not found. Please check if it exists in the correct location.")
